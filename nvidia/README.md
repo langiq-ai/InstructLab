@@ -1,8 +1,3 @@
-Great. I’ll begin a deep, PhD-level research task to create a comprehensive step-by-step tutorial on how to use InstructLab ([https://instructlab.ai/](https://instructlab.ai/)) to train an LLM from scratch or through fine-tuning. This will include detailed setup instructions, environment configurations, data formatting, training processes, model evaluation, and usage—all written in a format that assumes a high level of technical proficiency.
-
-I’ll let you know when it’s ready for your review.
-
-
 # Training Large Language Models with InstructLab
 
 InstructLab is an open-source framework by IBM/Red Hat for community-driven tuning of LLMs.  It uses a *taxonomy* of knowledge and skill recipes to generate synthetic training data and fine-tune models with minimal human-written examples.  This tutorial provides a detailed, step-by-step guide to installing InstructLab, preparing data, running training, evaluating models, and deploying or troubleshooting. It assumes a strong technical background and includes advanced topics like distributed training and community contribution workflows.
@@ -51,7 +46,39 @@ pip install 'instructlab[rocm]' \
    -C cmake.args="-DLLAMA_NATIVE=off"
 ```
 
-(*Tip:* On macOS you may need to run `xcode-select --install` to get a compiler. If a `pip install` fails with an “unsupported instruction `vpdpbusd`” error, retry adding `-C cmake.args="-DLLAMA_NATIVE=off"` to disable optimized assembly.)
+For NVIDIA GPUs specifically, ensure you have the appropriate CUDA toolkit installed:
+
+```bash
+# Check CUDA availability
+nvidia-smi
+
+# If CUDA is not installed, follow NVIDIA's installation guide:
+# https://developer.nvidia.com/cuda-downloads
+```
+
+When installing with CUDA support, you can specify the CUDA compute capability for your specific GPU to optimize performance:
+
+```bash
+# For RTX 30xx/40xx series GPUs (compute capability 8.6)
+pip install 'instructlab[cuda]' \
+   -C cmake.args="-DLLAMA_CUDA=on" \
+   -C cmake.args="-DLLAMA_CUBLAS=on" \
+   -C cmake.args="-DCMAKE_CUDA_ARCHITECTURES=86" \
+   -C cmake.args="-DLLAMA_NATIVE=off"
+
+# For older GPUs, replace the architecture value accordingly:
+# RTX 20xx: 75
+# GTX 10xx: 61
+# GTX 9xx: 52
+```
+
+(*Tip:* On macOS you may need to run `xcode-select --install` to get a compiler. If a `pip install` fails with an "unsupported instruction `vpdpbusd`" error, retry adding `-C cmake.args="-DLLAMA_NATIVE=off"` to disable optimized assembly.)
+
+You can verify your CUDA configuration by checking if PyTorch recognizes your GPU:
+
+```bash
+python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, Device count: {torch.cuda.device_count()}')"
+```
 
 Verify the installation by running:
 
@@ -71,20 +98,384 @@ ilab config init
 
 This creates a default config file (usually in `~/.config/instructlab/config.yaml` on Linux). You can edit this file to set paths or customize behaviors, but the defaults typically work. The CLI is now ready to use.
 
-Next, set up the **taxonomy** directory. InstructLab expects a filesystem tree of “knowledge” and “skills” YAML files describing tasks. By default, `ilab` will look under your local data directory (e.g. `~/.local/share/instructlab/taxonomy/` on Linux, or `~/Library/Application Support/instructlab/taxonomy/` on macOS).
+To view your current configuration settings:
+
+```bash
+ilab config show
+```
+
+You can modify specific settings as needed:
+
+```bash
+# Example: Change the models directory
+ilab config set models_dir /path/to/custom/models
+
+# Enable verbose logging
+ilab config set log_level DEBUG
+```
+
+Next, set up the **taxonomy** directory. InstructLab expects a filesystem tree of "knowledge" and "skills" YAML files describing tasks. By default, `ilab` will look under your local data directory (e.g. `~/.local/share/instructlab/taxonomy/` on Linux, or `~/Library/Application Support/instructlab/taxonomy/` on macOS).
+
+The taxonomy structure follows this pattern:
+```
+taxonomy/
+├── knowledge/
+│   └── domain/
+│       └── subdomain/
+│           └── topic/
+│               └── qna.yaml
+└── skills/
+    └── category/
+        └── subcategory/
+            └── skill_name/
+                └── qna.yaml
+```
+
+You can download and inspect the existing InstructLab taxonomy as a reference:
+
+```bash
+# Clone the official taxonomy repository
+git clone https://github.com/instructlab/taxonomy.git instructlab-taxonomy
+ls -la instructlab-taxonomy/knowledge/
+ls -la instructlab-taxonomy/skills/
+```
+
+### Creating Effective Knowledge Entries
 
 To contribute new knowledge/skills, create the appropriate directory structure and add a `qna.yaml` file. For example, to add a new knowledge item *Phoenix* under astronomy:
 
 ```bash
 # Adjust path to your ILAB data directory
 mkdir -p ~/.local/share/instructlab/taxonomy/knowledge/astronomy/constellations/Phoenix
-cp my_phoenix_qna.yaml ~/.local/share/instructlab/taxonomy/knowledge/astronomy/constellations/Phoenix/qna.yaml
+```
+
+Here's a comprehensive `qna.yaml` example for astronomical knowledge:
+
+```yaml
+version: 3
+task_description: "Information about the Phoenix constellation, including its history, stars, and observational details"
+created_by: "your_username"
+seed_examples:
+  - context: >-
+      Phoenix is a minor constellation in the southern sky. It was first depicted on a celestial globe by Dutch astronomer Petrus Plancius in 1597/1598 based on observations by Dutch explorers. It was introduced by Johann Bayer in 1603 in his star atlas Uranometria. The brightest star is Alpha Phoenicis, or Ankaa, with an apparent magnitude of 2.4. The constellation contains the galaxies NGC 625 and NGC 37, and the globular cluster NGC 6752.
+    question: "What is the Phoenix constellation and what are its notable features?"
+    answer: >-
+      The Phoenix constellation is a minor constellation located in the southern sky. Named after the mythical Phoenix bird, it has several notable features:
+      
+      1. Historical significance: It was first depicted by Dutch astronomer Petrus Plancius in 1597/1598 and was formally introduced in Johann Bayer's 1603 star atlas Uranometria.
+      
+      2. Brightest star: Alpha Phoenicis (also known as Ankaa), which has an apparent magnitude of 2.4.
+      
+      3. Deep sky objects: The constellation contains several interesting celestial bodies including the galaxies NGC 625 and NGC 37, and the globular cluster NGC 6752.
+      
+      4. Location: It's primarily visible from the Southern Hemisphere and appears low on the horizon or not at all from many parts of the Northern Hemisphere.
+
+  - context: >-
+      The name "Phoenix" refers to the mythical bird that cyclically regenerates or is reborn from the ashes of its predecessor. The mythology originated in ancient Egypt and was later adopted by the Greeks. In the Uranometria star atlas, the constellation represents this legendary bird.
+    question: "What is the mythological significance of the Phoenix constellation's name?"
+    answer: >-
+      The Phoenix constellation is named after the legendary Phoenix bird from mythology, which carries significant symbolism:
+      
+      The Phoenix is a mythical bird that cyclically regenerates or is reborn from the ashes of its predecessor. This powerful symbol of renewal and resurrection originated in ancient Egyptian mythology and was later adopted and expanded upon by Greek culture.
+      
+      In Johann Bayer's 1603 star atlas Uranometria, where the constellation was formally introduced to Western astronomy, the constellation depicts this legendary bird in the southern sky.
+      
+      The choice of this name reflects the ancient practice of associating celestial patterns with mythological figures and creatures. The Phoenix's symbolism of immortality and cyclical renewal made it a fitting name for this permanent fixture in the night sky that appears to "rise" and "set" with the Earth's rotation.
+
+  - context: >-
+      Observing Phoenix requires a clear view of the southern sky. The best time to observe it in the Northern Hemisphere is during late autumn, when it may be visible low on the southern horizon from southerly locations. In the Southern Hemisphere, it's visible from August to December. The constellation is located at Right Ascension 0h 12m to 2h 25m and Declination -57° to -39°.
+    question: "When and how can I best observe the Phoenix constellation?"
+    answer: >-
+      To best observe the Phoenix constellation:
+      
+      Timing:
+      - Southern Hemisphere: Phoenix is most visible from August to December, making this the prime observing season.
+      - Northern Hemisphere: Late autumn provides the best opportunity, though the constellation will appear very low on the southern horizon and only from southerly locations.
+      
+      Location requirements:
+      - You'll need a clear, unobstructed view of the southern sky.
+      - The constellation is found at coordinates Right Ascension 0h 12m to 2h 25m and Declination -57° to -39°.
+      
+      Observing tips:
+      - Use binoculars or a small telescope to spot the constellation's brightest star, Alpha Phoenicis (Ankaa).
+      - Dark sky conditions away from city lights will greatly enhance visibility.
+      - Look for Phoenix near other southern constellations like Grus and Tucana.
+      - A star chart or astronomy app can help identify the constellation's position relative to other celestial landmarks.
+```
+
+For a skill-based example, let's create a data science skill entry:
+
+```bash
+mkdir -p ~/.local/share/instructlab/taxonomy/skills/data_science/visualization/interactive_plots
+```
+
+Here's a comprehensive `qna.yaml` file for this skill:
+
+```yaml
+version: 3
+task_description: "Creating interactive data visualizations with Python libraries"
+created_by: "your_username"
+seed_examples:
+  - context: >-
+      Interactive plots allow users to explore data by hovering, zooming, panning, or clicking elements. 
+      Python libraries like Plotly, Bokeh, and HoloViews offer various interactive visualization capabilities.
+    question: "How can I create an interactive scatter plot with Plotly in Python that allows hovering to see data point details?"
+    answer: >-
+      # Creating Interactive Scatter Plots with Plotly in Python
+      
+      Here's how to create an interactive scatter plot in Plotly that shows details when hovering over points:
+      
+      ```python
+      import plotly.express as px
+      import pandas as pd
+      
+      # Create or load your dataset
+      df = pd.DataFrame({
+          'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          'y': [5, 6, 7, 8, 2, 4, 3, 2, 1, 9],
+          'size': [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+          'category': ['A', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'A'],
+          'descr': ['Point 1', 'Point 2', 'Point 3', 'Point 4', 'Point 5', 
+                    'Point 6', 'Point 7', 'Point 8', 'Point 9', 'Point 10']
+      })
+      
+      # Create interactive scatter plot with hover information
+      fig = px.scatter(
+          df, 
+          x='x', 
+          y='y', 
+          size='size',
+          color='category',
+          hover_name='descr',
+          hover_data={'x': True, 'y': True, 'size': True, 'category': True},
+          title='Interactive Scatter Plot with Hover Data'
+      )
+      
+      # Customize hover template (optional)
+      fig.update_traces(
+          hovertemplate='<b>%{hovertext}</b><br>X: %{x}<br>Y: %{y}<br>Size: %{marker.size}<br>Category: %{marker.color}'
+      )
+      
+      # Add interactive features
+      fig.update_layout(
+          hoverlabel=dict(
+              bgcolor="white",
+              font_size=16,
+              font_family="Rockwell"
+          )
+      )
+      
+      # Show the interactive plot
+      fig.show()
+      
+      # Save as HTML file (optional)
+      fig.write_html("interactive_scatter.html")
+      ```
+      
+      Key points about this implementation:
+      
+      1. We use `plotly.express` (px) as a high-level API for easy plot creation
+      2. The `hover_name` parameter sets the main title in the hover tooltip
+      3. The `hover_data` parameter controls which columns appear in the tooltip
+      4. Custom hover templates can be defined with `hovertemplate` for precise control
+      5. The interactive features include:
+         - Hovering to see data details
+         - Zooming with mouse wheel or selection
+         - Panning by clicking and dragging
+         - Double-clicking to reset the view
+         - Selecting specific data points
+         - Saving the current view
+      
+      To view the plot, run the code in a Jupyter notebook or use a browser when calling `fig.show()`. The HTML file can be shared with others who don't have Python installed.
+
+  - context: >-
+      Dashboard creation allows for multiple interactive visualizations to be combined into a single interface. 
+      Dash by Plotly is a Python framework for building web-based analytical applications.
+    question: "Can you provide a step-by-step guide to creating a simple interactive dashboard with Dash in Python?"
+    answer: >-
+      # Building an Interactive Dashboard with Dash in Python
+      
+      Here's a comprehensive step-by-step guide to creating a simple interactive dashboard with Dash:
+      
+      ## Step 1: Install the necessary packages
+      ```python
+      pip install dash pandas plotly
+      ```
+      
+      ## Step 2: Import the libraries and initialize the app
+      ```python
+      import dash
+      from dash import dcc, html
+      from dash.dependencies import Input, Output
+      import plotly.express as px
+      import pandas as pd
+      
+      # Initialize the Dash app
+      app = dash.Dash(__name__, title="Data Analysis Dashboard")
+      
+      # For deployment
+      server = app.server
+      ```
+      
+      ## Step 3: Prepare your data
+      ```python
+      # Sample data - replace with your own dataset
+      df = pd.DataFrame({
+          'Date': pd.date_range(start='2023-01-01', periods=100, freq='D'),
+          'Sales': [100 + i + i**1.5 for i in range(100)],
+          'Expenses': [50 + i + i**1.2 for i in range(100)],
+          'Region': ['North' if i % 4 == 0 else 'South' if i % 4 == 1 
+                    else 'East' if i % 4 == 2 else 'West' for i in range(100)]
+      })
+      
+      # Prepare data for region dropdown
+      regions = df['Region'].unique()
+      ```
+      
+      ## Step 4: Design the layout
+      ```python
+      app.layout = html.Div([
+          # Dashboard header
+          html.H1("Business Analytics Dashboard", 
+                  style={'textAlign': 'center', 'color': '#503D36', 'fontSize': 40}),
+          
+          # Description
+          html.Div([
+              html.P("Interactive dashboard showing sales and expense trends")
+          ], style={'textAlign': 'center', 'padding': '20px'}),
+          
+          # First row with filters
+          html.Div([
+              html.Div([
+                  html.Label('Select Region:'),
+                  dcc.Dropdown(
+                      id='region-dropdown',
+                      options=[{'label': region, 'value': region} for region in regions],
+                      value=regions[0],
+                      clearable=False
+                  )
+              ], style={'width': '30%', 'display': 'inline-block'})
+          ]),
+          
+          # Second row with charts
+          html.Div([
+              # Time series chart
+              html.Div([
+                  html.Label('Sales & Expenses Over Time'),
+                  dcc.Graph(id='time-series')
+              ], style={'width': '70%', 'display': 'inline-block', 'padding': '0 20px'}),
+              
+              # Pie chart
+              html.Div([
+                  html.Label('Sales by Region'),
+                  dcc.Graph(id='pie-chart')
+              ], style={'width': '30%', 'display': 'inline-block'})
+          ])
+      ], style={'padding': '50px'})
+      ```
+      
+      ## Step 5: Add callbacks to make it interactive
+      ```python
+      @app.callback(
+          Output('time-series', 'figure'),
+          [Input('region-dropdown', 'value')]
+      )
+      def update_timeseries(selected_region):
+          filtered_df = df[df['Region'] == selected_region]
+          
+          fig = px.line(
+              filtered_df, 
+              x='Date', 
+              y=['Sales', 'Expenses'],
+              title=f'{selected_region} Region: Sales & Expenses Trends'
+          )
+          
+          return fig
+      
+      @app.callback(
+          Output('pie-chart', 'figure'),
+          [Input('region-dropdown', 'value')]
+      )
+      def update_pie_chart(selected_region):
+          region_data = df.groupby('Region')['Sales'].sum().reset_index()
+          
+          fig = px.pie(
+              region_data,
+              values='Sales',
+              names='Region',
+              title='Total Sales by Region',
+              hole=0.3,
+          )
+          
+          # Highlight the selected region
+          fig.update_traces(
+              marker=dict(
+                  line=dict(
+                      color=['#000' if r == selected_region else '#fff' for r in region_data['Region']],
+                      width=[3 if r == selected_region else 1 for r in region_data['Region']]
+                  )
+              )
+          )
+          
+          return fig
+      ```
+      
+      ## Step 6: Run the app
+      ```python
+      if __name__ == '__main__':
+          app.run_server(debug=True, port=8050)
+      ```
+      
+      ## Key Features of this Dashboard:
+      
+      1. **Interactive Elements**:
+         - Dropdown to filter by region
+         - Hoverable charts with tooltips
+         - Zoomable and panable time series
+      
+      2. **Visual Components**:
+         - Time series chart for temporal analysis
+         - Pie chart for proportion analysis
+      
+      3. **Responsive Design**:
+         - Components are sized by percentage for better responsiveness
+      
+      4. **Real-time Updates**:
+         - Charts update automatically when selections change
+      
+      To enhance this dashboard further, you could add:
+      - Date range selectors
+      - Additional metrics and KPIs
+      - Data tables with sortable columns
+      - Download buttons for data export
+      - More advanced visualizations like heatmaps or choropleth maps
+      
+      After running the app, you can view it in your web browser at http://127.0.0.1:8050/
+```
+
+After creating your YAML files, validate them with the taxonomy command:
+
+```bash
 ilab taxonomy diff
 ```
 
-The `ilab taxonomy diff` command will validate the taxonomy and list any new or changed entries. (If the taxonomy has errors, fix the YAML according to the schema.) At this point you have installed new data into the InstructLab ecosystem.
+This will show output similar to:
+```
+Found 2 new or changed taxonomy items:
+- knowledge/astronomy/constellations/Phoenix
+- skills/data_science/visualization/interactive_plots
+```
 
-*Example:* The official docs demonstrate adding a Wikipedia-based QnA by downloading a YAML into the taxonomy and running `ilab taxonomy diff`. The same approach applies to skills and knowledge: place your YAML under `taxonomy/skills/...` or `taxonomy/knowledge/...`, then `ilab taxonomy diff`.
+Remember that you can also download existing taxonomy examples from the InstructLab repository:
+
+```bash
+# Download a specific example
+curl -o ~/.local/share/instructlab/taxonomy/knowledge/example/qna.yaml \
+  https://raw.githubusercontent.com/instructlab/taxonomy/main/knowledge/example/qna.yaml
+
+# Or clone the entire taxonomy for reference
+git clone https://github.com/instructlab/taxonomy.git reference-taxonomy
+```
 
 ## 3. Preparing Training Data
 
@@ -111,179 +502,22 @@ For domain adaptation, collect domain-specific knowledge as YAML facts and instr
 After placing your YAML files, run:
 
 ```bash
-ilab diff
+# View differences since last run
+ilab taxonomy diff
+
+# Validate the entire taxonomy structure
+ilab taxonomy validate
+
+# Get detailed information about a specific taxonomy item
+ilab taxonomy info knowledge/astronomy/constellations/Phoenix
 ```
 
-to see a summary of added content. Fix any validation errors reported.
-
-## 4. Generating and Augmenting Data
-
-With the taxonomy ready, use InstructLab’s **synthetic data generation** (SDG) pipeline to create a large training dataset. The command is:
+To prepare for data generation, you can also inspect the current dataset configuration:
 
 ```bash
-ilab data generate
+# Show the expected dataset paths
+ilab config show datasets_dir
+
+# List any existing datasets
+ls -la $(ilab config show datasets_dir)
 ```
-
-This runs InstructLab’s SDG process, which uses a *teacher* LLM (by default a quantized version of “Merlinite” or a larger model if available) to expand your seed examples into many Q\&A pairs. Depending on your machine and the taxonomy size, generation can take from tens of minutes to hours (hundreds of examples per example).
-
-By default, `ilab data generate` uses the “full” pipeline on CPU. You can enable GPU or multi-threading:
-
-* **GPU (CUDA):**
-
-  ```bash
-  ilab data generate --pipeline full --gpus 1
-  ```
-
-  (Replace `1` with the number of GPUs.)
-* **No GPU:**
-
-  ```bash
-  ilab data generate --pipeline simple
-  ```
-
-  The `simple` pipeline runs everything on CPU and may be slower.
-
-You can also supply a different model for generation with `--model` and an endpoint (`--endpoint-url`) if desired. For example, to use a local Hugging Face model for SDG:
-
-```bash
-ilab data generate --endpoint-url http://localhost:8000/v1
-```
-
-While data is being generated, you’ll see progress logs. The generator will iterate through each leaf of your taxonomy, creating questions and answers that mix your provided knowledge with the model’s own knowledge.
-
-When complete, InstructLab writes the synthetic dataset into the `datasets/` directory (usually `~/.local/share/instructlab/datasets`). You will see files like `knowledge_train_msgs_*.jsonl` and `skills_train_msgs_*.jsonl`. Inspect these files with `ls` or in a text editor to verify that new examples have been created. Do *not* manually edit them.
-
-&#x20;*Figure: InstructLab uses a taxonomy of knowledge and skill nodes to generate domain-specific synthetic data. For each branch (e.g. “finance” or “email skills”), the teacher model produces 0.1–2k synthetic examples which are then used to fine-tune the base LLM via phased training【62†】.*
-
-*(Note: The above figure illustrates the taxonomy-driven data generation process. The left branch shows generating “finance” examples, and the right shows “email” task examples. The base LLM is then fine-tuned with these combined examples.)*
-
-## 5. Training the Model
-
-With synthetic data ready, run the multi-phase training process. InstructLab’s default method is to first train on *knowledge* then on *skills*. The simplest command is:
-
-```bash
-ilab model train
-```
-
-(or equivalently `ilab train`). This will use the default “full” pipeline on CPU. On completion, you’ll get a new model: on Linux it is saved as a quantized GGUF file (e.g. `ggml-model-f16.gguf`) in the `models/` directory. On macOS M-series, training produces a folder (named `<model>-mlx-q`) containing LoRA adapter weights (`adapters.npz`) and config.
-
-For GPU acceleration, use the `--device` (or alias `--gpus`) option. For example:
-
-```bash
-ilab model train --pipeline full --device cuda 
-```
-
-This will run the training on CUDA GPUs. You can also try the “accelerated” pipeline for distributed or multi-GPU setups (it uses vLLM and batching). For instance:
-
-```bash
-ilab model train --pipeline accelerated --device cuda
-```
-
-This uses multiple CUDA streams for faster throughput. The exact flags depend on your hardware. On Linux with one GPU, `--pipeline full` is sufficient. On Mac M-series, you can use `--device mps`.
-
-The training command produces checkpoints for each epoch, but by default the best model is selected (on Linux as a `.gguf` file). You can specify the number of epochs or other hyperparameters via configuration (see `ilab config`) if needed.
-
-**Distributed and Multi-Phase Training (advanced):** InstructLab supports a multi-phase strategy (`lab-multiphase`) to separately train knowledge and skills. For example:
-
-```bash
-ilab model train --strategy lab-multiphase \
-  --phased-phase1-data datasets/knowledge_train_msgs.jsonl \
-  --phased-phase2-data datasets/skills_train_msgs.jsonl
-```
-
-This command takes your two JSONL files and runs the two-phase training. Multi-GPU training can be achieved by combining `--pipeline accelerated` and multiple `--device cuda`. For more details on distributed setups, refer to the InstructLab training docs or GPU-acceleration guide.
-
-Training can be time-consuming (hours on CPU, faster on GPU). You’ll see output logs; the final model(s) will be in `checkpoints/` and moved to `models/`. For example, after training you might find:
-
-```
-$ ls models
-ggml-merlinite-7b-lab-Q4_K_M.gguf  ggml-model-f16.gguf
-```
-
-Here `ggml-model-f16.gguf` is your new fine-tuned model.
-
-## 6. Evaluating and Validating the Model
-
-After training, evaluate the new model’s performance. InstructLab provides built-in benchmarks. First, locate your model file (GGUF or Safetensors). Then run:
-
-```bash
-export ILAB_MODELS_DIR=$HOME/.local/share/instructlab/models
-ilab model evaluate --benchmark mmlu --model $ILAB_MODELS_DIR/instructlab/my-new-model
-```
-
-This runs the MMLU (Massive Multitask Language Understanding) benchmark on your model. The CLI will print scores on various subject subsets. Other supported benchmarks include `mmlu_branch` (which measures the **improvement** over the base model), `mtbench`, and `mtbench_branch`. For example:
-
-```bash
-ilab model evaluate --benchmark mmlu_branch --model $ILAB_MODELS_DIR/instructlab/my-new-model \
-  --base-model $ILAB_MODELS_DIR/instructlab/my-base-model
-```
-
-This compares your fine-tuned model to the base. By default MT-Bench uses a judge model `prometheus-8x7b-v2.0` if available.
-
-*(Note:* The `ilab model evaluate` command requires local model files (not remote Hugging Face links) and currently supports only Safetensors or GGUF formats.)\*
-
-You can also use `ilab model chat` to qualitatively test the model with natural-language prompts. For example:
-
-```bash
-ilab model chat -m $ILAB_MODELS_DIR/instructlab/my-new-model.gguf
-```
-
-and ask it some questions. Compare the answers to the base model to gauge improvement. It is common to see some hallucinations or irrelevant text right after fine-tuning; in practice, the model often stabilizes after some time or an OS reboot.
-
-Additionally, there is an (experimental) `ilab model test` command (macOS only) that runs predefined tests on the model. For in-depth analysis, you can manually test on your own validation set by prompting or comparing metrics against your task-specific goals.
-
-## 7. Deploying or Using the Trained Model
-
-Once satisfied, you can serve or use the model locally. First, ensure the model is in GGUF format (the default on Linux). On macOS only, convert the model using:
-
-```bash
-ilab model convert
-```
-
-This quantizes and packs the fine-tuned model into a GGUF file required for serving. The output directory will contain a `.gguf` file under `*-trained`.
-
-Then launch the model server:
-
-```bash
-ilab model serve --model-path /path/to/instructlab-*-trained/model.gguf
-```
-
-By default this starts an HTTP API on port 8000 (compatible with an OpenAI-style inference endpoint). You can then send requests to it using the `ilab chat` CLI or any API client.
-
-Alternatively, to use the model interactively in the terminal, run:
-
-```bash
-ilab model chat -m /path/to/instructlab-*-trained/model.gguf
-```
-
-This opens a chat session with your fine-tuned model.
-
-Finally, integrate the model into your applications as needed (e.g. via the HTTP endpoint or by loading the GGUF into tools like llama.cpp, OLLama, or LM Studio). If you packaged an OCI image earlier, you could run it in a Docker/Podman container with GPU support for production inference.
-
-## 8. Troubleshooting and Common Issues
-
-* **Installation errors:** If `pip install instructlab` fails with native build errors (e.g. missing CMake or unsupported instructions), ensure a working C++ compiler is available and try adding `-C cmake.args="-DLLAMA_NATIVE=off"` to disable certain CPU optimizations. On macOS, run `xcode-select --install` if needed.
-
-* **Python version:** Using Python 3.12 or older versions may install an incompatible InstructLab release. Stick to 3.10 or 3.11.
-
-* **GPU not recognized:** If `--device cuda` still runs on CPU, verify your CUDA and PyTorch setup. You should see a Pytorch CUDA memory table in logs when training on GPU. Reinstall PyTorch with the correct CUDA version and ensure `pip install` completed with `-DLLAMA_CUBLAS=on` if on Windows/WSL (see setup docs). Check NVIDIA driver installation or ROCm environment if on Linux/AMD.
-
-* **Out-of-memory or slow generation:** If SDG or training runs out of memory, try reducing batch sizes or using fewer threads. On Windows, InstructLab’s Clean-up step sometimes fails to delete SafeTensor files, causing file-lock errors. If that happens, stop the process, reboot or kill stuck Python processes, then retry training.
-
-* **Output quality issues:** Immediately after training, the model’s responses may be erratic or regressive (hallucinations). This is known to occur right after fine-tuning; often waiting a bit or rebooting helps. InstructLab also advises adding more or higher-quality seed examples and re-running generation if the data seems poor. See the *Troubleshooting* section of the InstructLab docs for tips on refining prompts and teacher settings.
-
-* **Tab-completion not working:** If shell completion for `ilab` isn’t enabled automatically, follow the CLI instructions in the docs to source the completion script in your shell RC file.
-
-## 9. Advanced Topics
-
-* **Distributed and Multi-GPU Training:** For very large models or data, InstructLab supports multi-GPU training. Use `--pipeline accelerated` and `--gpus N` to split work across `N` GPUs. The `lab-multiphase` strategy (shown above) itself partitions knowledge vs. skill data. For multi-node training, you could combine InstructLab with a PyTorch distributed launcher (`torchrun`) around `ilab model train`, though this is an advanced workflow.
-
-* **Fine-tuning vs. Pre-training:** InstructLab performs **fine-tuning** (instruction-tuning) of an existing LLM. It does *not* pre-train models from scratch. Fine-tuning uses a pre-trained base (like Mistral, Granite, or Llama) and adjusts it with new synthetic data. This is far cheaper than full pre-training and is the intended use-case for InstructLab. As the Red Hat introduction notes, InstructLab “delivers big gains from small datasets” by iterating on foundation models.
-
-* **Contributing to the Community Repository:** If your fine-tuned model performs well, consider contributing your knowledge or skills back to the InstructLab community. Package your additions in the taxonomy structure (`qna.yaml` files, etc.) and submit a GitHub pull request to the [instructlab/taxonomy](https://github.com/instructlab/taxonomy) repository. The maintainers will review and, if accepted, incorporate it into the next community model build. InstructLab’s governance encourages a pull-request workflow: “contributors open pull requests… new skills merged into community LLM”. Check the [CONTRIBUTING guide](https://github.com/instructlab/instructlab/blob/main/CONTRIBUTING.md) for detailed guidelines.
-
-* **Community Model Builds:** Periodically, InstructLab maintainers perform a “Community Model Build” that composes all approved taxonomy contributions into a new model. These are published (e.g. on Hugging Face) as *lab-enhanced* models. You can use `ilab model download` to fetch the latest community model or view them on the InstructLab Hugging Face page.
-
-In summary, InstructLab streamlines the LLM fine-tuning pipeline with an emphasis on *community-driven data*. This tutorial has covered the end-to-end process from setup to deployment. For more details and updates, always refer to the official [InstructLab documentation](https://docs.instructlab.ai/) and GitHub repositories.
-
-**References:** Official docs and guides, Red Hat/IBM tutorials, and InstructLab GitHub resources.
