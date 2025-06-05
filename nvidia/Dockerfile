@@ -75,11 +75,23 @@ RUN echo '#!/bin/bash\n\
 
 RUN pip install vllm@git+https://github.com/opendatahub-io/vllm@2024.08.01
 
+# Create user sandesh
+RUN useradd -m -s /bin/bash sandesh && \
+    usermod -aG sudo sandesh && \
+    mkdir -p /home/sandesh/.local/share/instructlab && \
+    chown -R sandesh:sandesh /home/sandesh
+
 # Optional: Set InstructLab model/data dir as volume
-VOLUME ["/root/.local/share/instructlab"]
+VOLUME ["/home/sandesh/.local/share/instructlab"]
 
 # Set working directory
 WORKDIR /workspace
+
+# Change ownership of workspace to sandesh user
+RUN chown -R sandesh:sandesh /workspace
+
+# Switch to sandesh user
+USER sandesh
 
 # Set entrypoint to handle GPU detection
 ENTRYPOINT ["/usr/local/bin/gpu-entrypoint.sh"]
