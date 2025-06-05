@@ -1,10 +1,16 @@
 # Base image with CUDA (choose one compatible with your driver, e.g. CUDA 12.1 + Python 3.11)
 FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
+# Add NVIDIA runtime labels
+LABEL com.nvidia.volumes.needed="nvidia_driver"
+LABEL com.nvidia.cuda.version="12.1.1"
+
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
-    VIRTUAL_ENV=/opt/venv
+    VIRTUAL_ENV=/opt/venv \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Install system dependencies
 RUN apt-get update && \
@@ -23,6 +29,7 @@ RUN apt-get update && \
     software-properties-common \
     libssl-dev \
     libffi-dev \
+    nvidia-container-toolkit-base \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python 3.11 as default
@@ -51,7 +58,21 @@ RUN pip install 'instructlab[cuda]' \
 ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0" \
     NVCC_FLAGS="-diag-suppress 179,39" \
     CFLAGS="-I/usr/local/cuda/include" \
-    LDFLAGS="-L/usr/local/cuda/lib64"
+    LDFLAGS="-L/usr/local/cuda/lib64" \
+    CUDA_HOME=/usr/local/cuda
+
+# Add GPU detection script
+RUN echo '#!/bin/bash\n\
+    if nvidia-smi &> /dev/null; then\n\
+    echo "GPU detected, using CUDA"\n\
+    export CUDA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0}\n\
+    else\n\
+    echo "No GPU detected, falling back to CPU"\n\
+    export CUDA_VISIBLE_DEVICES=""\n\
+    fi\n\
+    exec "$@"' > /usr/local/bin/gpu-entrypoint.sh && \
+    chmod +x /usr/local/bin/gpu-entrypoint.sh
+
 RUN pip install vllm@git+https://github.com/opendatahub-io/vllm@2024.08.01
 
 # Optional: Set InstructLab model/data dir as volume
@@ -59,6 +80,9 @@ VOLUME ["/root/.local/share/instructlab"]
 
 # Set working directory
 WORKDIR /workspace
+
+# Set entrypoint to handle GPU detection
+ENTRYPOINT ["/usr/local/bin/gpu-entrypoint.sh"]
 
 # Default command (can be overridden)
 CMD [ "ilab" ]
