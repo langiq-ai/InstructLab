@@ -30,6 +30,7 @@ RUN apt-get update && \
     libssl-dev \
     libffi-dev \
     nvidia-container-toolkit-base \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python 3.11 as default
@@ -78,8 +79,9 @@ RUN pip install vllm@git+https://github.com/opendatahub-io/vllm@2024.08.01
 # Create user sandesh
 RUN useradd -m -s /bin/bash sandesh && \
     usermod -aG sudo sandesh && \
+    echo "sandesh ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     mkdir -p /home/sandesh/.local/share/instructlab && \
-    chown -R sandesh:sandesh /home/sandesh
+    chown -R sandesh:sandesh /home/sandesh/.local
 
 # Optional: Set InstructLab model/data dir as volume
 VOLUME ["/home/sandesh/.local/share/instructlab"]
@@ -97,4 +99,4 @@ USER sandesh
 ENTRYPOINT ["/usr/local/bin/gpu-entrypoint.sh"]
 
 # Default command (can be overridden)
-CMD [ "ilab" ]
+CMD [ "/bin/bash" ]

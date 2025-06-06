@@ -60,6 +60,11 @@ restart:
 status:
 	docker compose ps
 
+# Execute commands in running container
+.PHONY: exec
+exec:
+	docker compose exec instructlab bash
+
 # Help information
 .PHONY: help
 help:
@@ -74,6 +79,7 @@ help:
 	@echo "  logs: View logs from the service"
 	@echo "  restart: Restart the service"
 	@echo "  status: Check status of services"
+	@echo "  exec: Execute bash in running container"
 	@echo "  clean: Remove the Docker image, containers, and volumes using Docker Compose"
 	@echo "  up: Start services in the background using Docker Compose"
 	@echo "  down: Stop running services using Docker Compose"

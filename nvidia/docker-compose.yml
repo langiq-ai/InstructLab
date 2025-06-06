@@ -1,22 +1,20 @@
-version: '3.8'
-
 services:
   instructlab:
     build:
       context: .
       dockerfile: Dockerfile
-    image: instructlab-gpu-nvidia 
+    image: instructlab-gpu-nvidia
     container_name: instructlab-container
     volumes:
-      - ${HOME}/.local/share/instructlab:/root/.local/share/instructlab
-      - .:/workspace
+      - ${HOME}/.local/share/instructlab:/home/sandesh/.local/share/instructlab
+      - ./workspace:/workspace
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
     tty: true
     stdin_open: true
     command: ilab
